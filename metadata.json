@@ -1,0 +1,6 @@
+{
+  "name": "FoodLink: Surplus Food Redistribution System",
+  "description": "An elegant, handcrafted platform connecting food donors like restaurants and canteens with local NGOs to redirect surplus food and reduce waste.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

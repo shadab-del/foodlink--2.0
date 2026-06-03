@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user platform profile (Donor, NGO or Admin)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Matches the firebase auth User ID" },
+        "name": { "type": "string", "description": "Name of the restaurant or charity" },
+        "email": { "type": "string", "description": "Email address of the user" },
+        "role": { "type": "string", "enum": ["donor", "ngo", "admin"], "description": "The user role" },
+        "address": { "type": "string", "description": "Physical operating address" },
+        "phoneNumber": { "type": "string", "description": "Contact number" },
+        "verified": { "type": "boolean", "description": "Approval status from system admin" }
+      },
+      "required": ["uid", "name", "email", "role", "address", "phoneNumber", "verified"]
+    },
+    "Donation": {
+      "title": "Donation",
+      "description": "A food surplus listing uploaded by a donor",
+      "type": "object",
+      "properties": {
+        "donorId": { "type": "string", "description": "UID of the donor user" },
+        "donorName": { "type": "string", "description": "Name of the donor restaurant" },
+        "foodName": { "type": "string", "description": "Item details (e.g. Veg Biryani)" },
+        "quantity": { "type": "string", "description": "Quantity representation in numbers/units" },
+        "category": { "type": "string", "enum": ["veg", "non-veg"], "description": "Whether veg or non-veg" },
+        "pickupLocation": { "type": "string", "description": "Location description" },
+        "preparedTime": { "type": "string", "description": "Timestamp or descriptor when prepared" },
+        "expiryTime": { "type": "string", "description": "Timestamp or descriptor when food expires" },
+        "imageURL": { "type": "string", "description": "Direct link to the food picture stored" },
+        "status": { "type": "string", "enum": ["available", "requested", "accepted", "picked up", "completed"], "description": "Status of the donation lifecycle" },
+        "createdAt": { "type": "string", "description": "Chronological stamp" }
+      },
+      "required": ["donorId", "donorName", "foodName", "quantity", "category", "pickupLocation", "preparedTime", "expiryTime", "status", "createdAt"]
+    },
+    "Request": {
+      "title": "Request",
+      "description": "A request made by an NGO to pick up a specific surplus food",
+      "type": "object",
+      "properties": {
+        "ngoId": { "type": "string", "description": "UID of the NGO" },
+        "ngoName": { "type": "string", "description": "Name of the requesting organization" },
+        "donationId": { "type": "string", "description": "Reference donation ID" },
+        "donorId": { "type": "string", "description": "Reference donor user ID" },
+        "requestStatus": { "type": "string", "enum": ["requested", "accepted", "picked up", "completed"], "description": "Workflow phase of this pickup request" },
+        "timestamp": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["ngoId", "ngoName", "donationId", "donorId", "requestStatus", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Alert messages for in-app status updates",
+      "type": "object",
+      "properties": {
+        "receiverId": { "type": "string", "description": "UID of recipient" },
+        "message": { "type": "string", "description": "Notification content" },
+        "readStatus": { "type": "boolean", "description": "Has the target read the notice?" },
+        "createdAt": { "type": "string", "description": "Chronological stamp" }
+      },
+      "required": ["receiverId", "message", "readStatus", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles database"
+    },
+    "/donations/{donationId}": {
+      "schema": "Donation",
+      "description": "Available food donations"
+    },
+    "/requests/{requestId}": {
+      "schema": "Request",
+      "description": "Donation requests linking donors with NGOs"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Real-time alerts for users about status updates"
+    }
+  }
+}

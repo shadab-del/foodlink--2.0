@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Default Deny Net (The "Safety Net")
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Standard high-trust helpers (Phase 3 Primitives)
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData(request.auth.uid).role == 'admin';
+    }
+
+    function isApprovedPartner() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData(request.auth.uid).verified == true;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 2. Collection Group Rules and Entities (Pillar 2 Validation Blueprints)
+    
+    // USERS COLLECTION
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.uid is string && data.uid.size() <= 128 &&
+               data.name is string && data.name.size() <= 100 &&
+               data.email is string && data.email.size() <= 100 &&
+               data.role in ['donor', 'ngo', 'admin'] &&
+               data.address is string && data.address.size() <= 300 &&
+               data.phoneNumber is string && data.phoneNumber.size() <= 30 &&
+               data.verified is bool;
+      }
+
+      allow read: if isSignedIn(); // Verified stakeholders can discover profiles for pickup coordination
+      
+      // Prevent Self-Assigned Privileges
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().verified == false && incoming().role in ['donor', 'ngo'];
+      
+      // Block users from modifying critical RBAC fields like role or verified flag
+      allow update: if (isOwner(userId) && isValidUser(incoming()) && incoming().role == existing().role && incoming().verified == existing().verified) || isAdmin();
+      
+      allow delete: if isAdmin();
+    }
+
+    // DONATIONS COLLECTION
+    match /donations/{donationId} {
+      function isValidDonation(data) {
+        return data.donorId is string && data.donorId.size() <= 128 &&
+               data.donorName is string && data.donorName.size() <= 100 &&
+               data.foodName is string && data.foodName.size() <= 100 &&
+               data.quantity is string && data.quantity.size() <= 50 &&
+               data.category in ['veg', 'non-veg'] &&
+               data.pickupLocation is string && data.pickupLocation.size() <= 200 &&
+               data.preparedTime is string &&
+               data.expiryTime is string &&
+               data.status in ['available', 'requested', 'accepted', 'picked up', 'completed'] &&
+               data.createdAt is string;
+      }
+
+      allow read, list: if isSignedIn();
+      
+      allow create: if isApprovedPartner() && incoming().donorId == request.auth.uid && isValidDonation(incoming());
+      
+      // Only the listing owner or Admin can modify/update
+      allow update: if (isSignedIn() && (resource.data.donorId == request.auth.uid || isAdmin()) && isValidDonation(incoming()) && incoming().donorId == existing().donorId) 
+                    || (isApprovedPartner() && incoming().diff(existing()).affectedKeys().hasOnly(['status'])); // Allows status lock updates by verified claimants
+      
+      allow delete: if (isSignedIn() && resource.data.donorId == request.auth.uid) || isAdmin();
+    }
+
+    // REQUESTS COLLECTION
+    match /requests/{requestId} {
+      function isValidRequest(data) {
+        return data.ngoId is string && data.ngoId.size() <= 128 &&
+               data.ngoName is string && data.ngoName.size() <= 100 &&
+               data.donationId is string && data.donationId.size() <= 128 &&
+               data.donorId is string && data.donorId.size() <= 128 &&
+               data.requestStatus in ['requested', 'accepted', 'picked up', 'completed'] &&
+               data.timestamp is string;
+      }
+
+      allow read, list: if isSignedIn();
+      
+      allow create: if isApprovedPartner() && incoming().ngoId == request.auth.uid && isValidRequest(incoming());
+      
+      allow update: if isSignedIn() && (resource.data.ngoId == request.auth.uid || resource.data.donorId == request.auth.uid || isAdmin()) && isValidRequest(incoming()) && incoming().ngoId == existing().ngoId;
+      
+      allow delete: if isSignedIn() && (resource.data.ngoId == request.auth.uid || resource.data.donorId == request.auth.uid || isAdmin());
+    }
+
+    // NOTIFICATIONS COLLECTION
+    match /notifications/{notificationId} {
+      function isValidNotification(data) {
+        return data.receiverId is string && data.receiverId.size() <= 128 &&
+               data.message is string && data.message.size() <= 250 &&
+               data.readStatus is bool &&
+               data.createdAt is string;
+      }
+
+      allow read, list: if isSignedIn() && (resource.data.receiverId == request.auth.uid || resource.data.receiverId == "");
+      
+      allow create: if isSignedIn() && isValidNotification(incoming());
+      
+      allow update: if isSignedIn() && (resource.data.receiverId == request.auth.uid || isAdmin()) && incoming().diff(existing()).affectedKeys().hasOnly(['readStatus']);
+      
+      allow delete: if isAdmin();
+    }
+
+  }
+}
